@@ -1,69 +1,186 @@
-# React + TypeScript + Vite
+# 表格开发技术文档
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## 渲染方式
 
-Currently, two official plugins are available:
+### DOM 渲染
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **实现方式**：使用原生 HTML 表格或 div 模拟表格结构
+- **优点**：实现简单，可直接使用 CSS 样式，易于调试
+- **缺点**：数据量大时性能下降明显，DOM 节点过多导致页面卡顿
+- **适用场景**：数据量小（<1000 行），交互简单的表格
 
-## Expanding the ESLint configuration
+### 虚拟表格+预渲染
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **实现方式**：只渲染可视区域的 DOM 元素，通过位置计算模拟完整表格
+- **优点**：大幅减少 DOM 节点数量，提高渲染性能
+- **缺点**：需要精确计算元素位置，滚动处理复杂
+- **适用场景**：中等数据量（1000-10000 行）的表格
+- **关键技术**：
+  - 虚拟滚动（只渲染可视区域）
+  - 行/列高度缓存
+  - 预渲染（可视区域外额外渲染部分数据减少白屏）
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Canvas 渲染
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+- **实现方式**：使用 Canvas API 绘制整个表格
+- **优点**：完全控制渲染过程，适合复杂样式和大量数据
+- **缺点**：交互实现复杂，文本渲染和事件处理需要自行实现
+- **适用场景**：大量数据（>10000 行）或需要自定义渲染的表格
+- **关键技术**：
+  - Canvas 绘制优化
+  - 事件代理和坐标转换
+  - 文本测量和缓存
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### Canvas + 可视区渲染
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+- **实现方式**：结合 Canvas 和虚拟滚动技术，只绘制可视区域
+- **优点**：极高的渲染性能，支持超大数据集
+- **缺点**：实现最为复杂，需要精确的位置计算和事件处理
+- **适用场景**：超大数据量（>100000 行）的高性能表格
+- **关键技术**：
+  - 可视区域计算
+  - 增量渲染
+  - 图层分离（表头、内容、选区等）
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 在线协同方案
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### 操作冲突解决方案
+
+#### CRDT (无冲突复制数据类型)
+
+- **原理**：每个操作都带有唯一标识和时间戳，可以在任意顺序应用并最终收敛
+- **优点**：完全去中心化，支持离线编辑
+- **实现方式**：
+  - Yjs/Automerge 等库集成
+  - 单元格级别的操作追踪
+  - 自动合并冲突
+
+#### OT (操作转换)
+
+- **原理**：将并发操作转换为序列化操作，保证最终一致性
+- **优点**：实时性好，广泛应用于协同编辑
+- **实现方式**：
+  - 中央服务器协调
+  - 操作日志和转换函数
+  - 版本控制和回滚机制
+
+### 状态同步机制
+
+- **增量同步**：只传输变更的单元格数据
+- **批量更新**：合并短时间内的多次操作，减少网络请求
+- **乐观更新**：本地立即应用更改，异步确认服务器结果
+- **锁机制**：单元格/行/列级别的编辑锁，避免同时编辑冲突
+
+### 实时通信技术
+
+- **WebSocket**：全双工通信，实时推送变更
+- **Server-Sent Events**：服务器推送事件
+- **长轮询**：兼容性好的实时通信备选方案
+- **消息队列**：处理大量并发编辑请求
+
+## 单元格选择机制
+
+### 选择模式
+
+- **单元格选择**：点击选中单个单元格
+- **区域选择**：拖拽选择矩形区域
+- **行/列选择**：点击行/列头部选择整行/列
+- **多区域选择**：按住 Ctrl/Command 键选择多个不连续区域
+- **智能选择**：双击边界自动扩展到数据边界
+
+### 选择实现技术
+
+- **DOM 实现**：使用 CSS 类标记选中状态
+- **Canvas 实现**：绘制半透明覆盖层表示选区
+- **混合实现**：DOM 表示焦点单元格，Canvas 绘制大面积选区
+- **选区模型**：维护独立的选区数据结构，与渲染层分离
+
+### 键盘导航
+
+- **方向键导航**：上下左右移动焦点
+- **Tab/Shift+Tab**：横向导航
+- **Enter/Shift+Enter**：纵向导航
+- **Home/End/PageUp/PageDown**：快速导航
+- **Ctrl+A**：全选
+
+## 单元格绘制微内核架构
+
+### 架构设计
+
+- **核心渲染引擎**：负责基础绘制逻辑
+- **插件化渲染器**：不同类型单元格使用不同渲染器
+- **事件分发系统**：将用户交互路由到对应处理器
+- **样式计算引擎**：计算和缓存单元格样式
+
+### 单元格渲染器
+
+- **文本渲染器**：处理普通文本、数字、日期等
+- **富文本渲染器**：支持格式化文本、HTML 内容
+- **组件渲染器**：在单元格中嵌入自定义组件（下拉框、按钮等）
+- **图表渲染器**：在单元格中渲染小型图表（迷你图、进度条等）
+
+### 数据与渲染分离
+
+- **数据模型层**：纯粹的数据结构，不包含渲染逻辑
+- **视图模型层**：处理数据到视图的映射和转换
+- **渲染层**：负责实际绘制，可替换不同实现
+- **控制器层**：处理用户交互，更新模型和视图
+
+## 多维表格技术
+
+### 数据结构设计
+
+- **稀疏矩阵**：高效存储大型稀疏表格
+- **树形结构**：支持分组和层级数据
+- **索引优化**：快速查询和过滤大数据集
+
+### 高级功能实现
+
+- **冻结行列**：分区域渲染实现
+- **合并单元格**：特殊的渲染和选择逻辑
+- **过滤和排序**：视图层处理，不改变原始数据
+- **分组和聚合**：动态计算和缓存结果
+
+### 性能优化技术
+
+- **渲染分层**：背景、网格线、内容、选区分层绘制
+- **增量渲染**：只更新变化的部分
+- **后台计算**：使用 Web Workers 进行数据处理
+- **GPU 加速**：使用 WebGL 或硬件加速 Canvas
+
+### 数据处理
+
+- **数据分片**：大数据集分片加载
+- **虚拟化数据源**：按需加载远程数据
+- **数据压缩**：减少传输和存储开销
+- **增量更新**：只传输和处理变更部分
+
+## 技术选型建议
+
+### 场景与技术匹配
+
+- **小型表格**：DOM 渲染 + 简单状态管理
+- **中型表格**：虚拟滚动 + 高效状态管理
+- **大型表格**：Canvas 渲染 + 分层架构
+- **超大表格**：WebGL 渲染 + 微内核架构
+
+### 框架选择考量
+
+- **React**：组件化好，但需注意性能优化
+- **Vue**：响应式系统适合数据驱动的表格
+- **原生 JS**：最大性能，但开发成本高
+- **专用库**：考虑 AG Grid、Handsontable 等成熟方案
+
+## 未来技术展望
+
+- **WebAssembly**：核心计算逻辑用 Rust/C++ 实现提升性能
+- **WebGPU**：利用 GPU 并行计算能力处理大数据
+- **机器学习**：智能数据分析和预测
+- **AR/VR**：三维数据可视化表格
+
+## 开发与测试
+
+- **性能基准测试**：建立渲染、交互性能指标
+- **单元测试**：核心算法和数据结构测试
+- **E2E 测试**：模拟真实用户操作
+- **性能监控**：实时监测内存和 CPU 使用
