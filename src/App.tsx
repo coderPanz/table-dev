@@ -1,10 +1,10 @@
-import TableVirtual from './components/table-virtual'
+import TableCanvas from './components/table-canvas'
 function App() {
 
   return (
     <>
       {/* <TableDom /> */}
-      <TableVirtual />
+      <TableCanvas />
     </>
   )
 }
