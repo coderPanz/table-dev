@@ -45,8 +45,8 @@ const TableCanvas = (): React.ReactNode => {
   // 表格配置，使用useMemo避免重复创建对象
   const config = useMemo<TableConfig>(
     () => ({
-      rows: 10000, // 支持大量数据
-      columns: 50, // 支持更多列
+      rows: 10000, 
+      columns: 50,
       cellWidth: 150, // 单元格宽度
       cellHeight: 40, // 单元格高度
       headerHeight: 50, // 表头高度
@@ -60,6 +60,9 @@ const TableCanvas = (): React.ReactNode => {
     () => config.rows * config.cellHeight + config.headerHeight,
     [config]
   )
+  console.log('表格总宽度', totalWidth)
+  console.log('表格总高度', totalHeight)
+
 
   // 引用DOM元素
   const containerRef = useRef<HTMLDivElement>(null)
@@ -280,7 +283,7 @@ const TableCanvas = (): React.ReactNode => {
       ref={containerRef}
       style={{
         width: "100%",
-        height: "500px",
+        height: "100vh",
         overflow: "auto",
         position: "relative",
       }}

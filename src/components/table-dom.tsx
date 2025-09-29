@@ -19,7 +19,6 @@ const generateTableData = (config: TableConfig) => {
 
 // 直接操作 DOM 的方式去渲染表格数据，巨量数据场景性能表现拉跨。
 const TableDom = (): React.ReactNode => {
-  // 可以根据需要修改行数和列数
   const config: TableConfig = {
     rows: 100,
     columns: 10,
