@@ -20,7 +20,7 @@ const generateTableData = (config: TableConfig) => {
 // 直接操作 DOM 的方式去渲染表格数据，巨量数据场景性能表现拉跨。
 const TableDom = (): React.ReactNode => {
   const config: TableConfig = {
-    rows: 100,
+    rows: 10000,
     columns: 10,
   }
 
@@ -45,7 +45,14 @@ const TableDom = (): React.ReactNode => {
   }, [])
 
   return (
-    <div style={{ width: "100%" }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {/* 渲染时间显示 */}
       <div
         style={{
@@ -54,6 +61,7 @@ const TableDom = (): React.ReactNode => {
           borderBottom: "2px solid #1890ff",
           fontWeight: "bold",
           fontSize: "16px",
+          flexShrink: 0,
         }}
       >
         <span style={{ color: "#1890ff" }}>DOM直接渲染方案</span>
@@ -67,54 +75,66 @@ const TableDom = (): React.ReactNode => {
         </span>
       </div>
 
-      {/* 表头 */}
+      {/* 滚动容器 */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${config.columns}, 1fr)`,
-          backgroundColor: "#f5f5f5",
-          fontWeight: "bold",
-          borderBottom: "1px solid #ddd",
+          flex: 1,
+          overflow: "auto",
+          width: "100%",
         }}
       >
-        {Array.from({ length: config.columns }, (_, index) => (
-          <div
-            key={`header-${index}`}
-            style={{
-              padding: "12px",
-              borderRight:
-                index < config.columns - 1 ? "1px solid #ddd" : "none",
-            }}
-          >
-            列 {index + 1}
-          </div>
-        ))}
-      </div>
-
-      {/* 表格内容 */}
-      {tableData.map((row, rowIndex) => (
+        {/* 表头 */}
         <div
-          key={`row-${rowIndex}`}
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${config.columns}, 1fr)`,
+            backgroundColor: "#f5f5f5",
+            fontWeight: "bold",
             borderBottom: "1px solid #ddd",
+            position: "sticky",
+            top: 0,
+            zIndex: 1,
           }}
         >
-          {Array.from({ length: config.columns }, (_, colIndex) => (
+          {Array.from({ length: config.columns }, (_, index) => (
             <div
-              key={`cell-${rowIndex}-${colIndex}`}
+              key={`header-${index}`}
               style={{
                 padding: "12px",
                 borderRight:
-                  colIndex < config.columns - 1 ? "1px solid #ddd" : "none",
+                  index < config.columns - 1 ? "1px solid #ddd" : "none",
               }}
             >
-              {row[`column${colIndex + 1}`]}
+              列 {index + 1}
             </div>
           ))}
         </div>
-      ))}
+
+        {/* 表格内容 */}
+        {tableData.map((row, rowIndex) => (
+          <div
+            key={`row-${rowIndex}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${config.columns}, 1fr)`,
+              borderBottom: "1px solid #ddd",
+            }}
+          >
+            {Array.from({ length: config.columns }, (_, colIndex) => (
+              <div
+                key={`cell-${rowIndex}-${colIndex}`}
+                style={{
+                  padding: "12px",
+                  borderRight:
+                    colIndex < config.columns - 1 ? "1px solid #ddd" : "none",
+                }}
+              >
+                {row[`column${colIndex + 1}`]}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
