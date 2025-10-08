@@ -101,7 +101,7 @@ const TableVirtual = ({
     rowHeight: 50, // 每行高度（固定）
     columnWidth: 150, // 每列宽度（固定）
     visibleRows: 10, // 可视区域显示的行数
-    bufferRows: 5, // 上下缓冲区行数
+    bufferRows: 10, // 上下缓冲区行数
   }
 
   // 合并默认配置和传入的配置
@@ -120,6 +120,10 @@ const TableVirtual = ({
   const [endIndex, setEndIndex] = useState(
     config.visibleRows + config.bufferRows
   )
+
+  // 渲染时间测量
+  const [renderTime, setRenderTime] = useState<number | null>(null)
+  const startTimeRef = useRef<number>(performance.now())
 
   // 获取行高的函数
   const getRowHeight = useCallback(
@@ -380,6 +384,23 @@ const TableVirtual = ({
     }
   }, [onScroll])
 
+  /**
+   * 测量初始渲染时间
+   */
+  useEffect(() => {
+    try {
+      // 等待首次渲染完成后测量
+      requestAnimationFrame(() => {
+        const endTime = performance.now()
+        const duration = endTime - startTimeRef.current
+        setRenderTime(duration)
+        console.log(`虚拟滚动方案 - 渲染时间: ${duration.toFixed(2)}ms`)
+      })
+    } catch (error) {
+      console.error("测量渲染时间时出错:", error)
+    }
+  }, [])
+
   // 计算可视区域内需要渲染的行
   const visibleRows = tableData.slice(startIndex, endIndex + 1)
 
@@ -417,7 +438,7 @@ const TableVirtual = ({
       rowIndex: number
       columns: number
       top: string
-      mode: VirtualListMode
+      mode: VirtualListModeType
     }) => {
       // 根据模式生成不同的网格模板
       const getGridTemplateColumns = () => {
@@ -538,6 +559,27 @@ const TableVirtual = ({
 
   return (
     <div style={{ width: "100%" }}>
+      {/* 渲染时间显示 */}
+      <div
+        style={{
+          padding: "16px",
+          backgroundColor: "#f0f2f5",
+          borderBottom: "2px solid #1890ff",
+          fontWeight: "bold",
+          fontSize: "16px",
+        }}
+      >
+        <span style={{ color: "#1890ff" }}>虚拟滚动渲染方案</span>
+        {renderTime !== null && (
+          <span style={{ marginLeft: "20px", color: "#52c41a" }}>
+            渲染时间: {renderTime.toFixed(2)}ms
+          </span>
+        )}
+        <span style={{ marginLeft: "20px", color: "#666", fontSize: "14px" }}>
+          (数据量: {config.rows} 行 × {config.columns} 列)
+        </span>
+      </div>
+
       {/* 表头（固定在顶部） */}
       <div
         style={{

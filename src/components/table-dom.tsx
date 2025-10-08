@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useState, useEffect, useRef } from "react"
 
 interface TableConfig {
   rows: number
@@ -26,8 +26,47 @@ const TableDom = (): React.ReactNode => {
 
   const tableData = generateTableData(config)
 
+  // 渲染时间测量
+  const [renderTime, setRenderTime] = useState<number | null>(null)
+  const startTimeRef = useRef<number>(performance.now())
+
+  /**
+   * 测量初始渲染时间
+   */
+  useEffect(() => {
+    try {
+      const endTime = performance.now()
+      const duration = endTime - startTimeRef.current
+      setRenderTime(duration)
+      console.log(`DOM渲染方案 - 渲染时间: ${duration.toFixed(2)}ms`)
+    } catch (error) {
+      console.error("测量渲染时间时出错:", error)
+    }
+  }, [])
+
   return (
     <div style={{ width: "100%" }}>
+      {/* 渲染时间显示 */}
+      <div
+        style={{
+          padding: "16px",
+          backgroundColor: "#f0f2f5",
+          borderBottom: "2px solid #1890ff",
+          fontWeight: "bold",
+          fontSize: "16px",
+        }}
+      >
+        <span style={{ color: "#1890ff" }}>DOM直接渲染方案</span>
+        {renderTime !== null && (
+          <span style={{ marginLeft: "20px", color: "#52c41a" }}>
+            渲染时间: {renderTime.toFixed(2)}ms
+          </span>
+        )}
+        <span style={{ marginLeft: "20px", color: "#666", fontSize: "14px" }}>
+          (数据量: {config.rows} 行 × {config.columns} 列)
+        </span>
+      </div>
+
       {/* 表头 */}
       <div
         style={{

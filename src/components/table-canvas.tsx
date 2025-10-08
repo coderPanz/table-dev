@@ -22,6 +22,14 @@ interface ViewportInfo {
 }
 
 /**
+ * 选中单元格信息接口
+ */
+interface SelectedCell {
+  row: number // 选中的行索引
+  col: number // 选中的列索引
+}
+
+/**
  * 生成表格数据
  * @param config 表格配置
  * @returns 表格数据数组
@@ -45,7 +53,7 @@ const TableCanvas = (): React.ReactNode => {
   // 表格配置，使用useMemo避免重复创建对象
   const config = useMemo<TableConfig>(
     () => ({
-      rows: 10000, 
+      rows: 10000,
       columns: 50,
       cellWidth: 150, // 单元格宽度
       cellHeight: 40, // 单元格高度
@@ -54,21 +62,19 @@ const TableCanvas = (): React.ReactNode => {
     []
   )
 
-  // 计算表格总宽度和总高度（使用useMemo避免重复计算）
-  const totalWidth = useMemo(() => config.columns * config.cellWidth, [config])
+  // 计算表格总宽度和总高度
+  const totalWidth = useMemo(() => {
+    return config.columns * config.cellWidth
+  }, [config])
   const totalHeight = useMemo(
     () => config.rows * config.cellHeight + config.headerHeight,
     [config]
   )
-  console.log('表格总宽度', totalWidth)
-  console.log('表格总高度', totalHeight)
 
-
-  // 引用DOM元素
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // 生成表格数据（使用useMemo缓存数据，避免重复生成）
+  // 生成表格数据
   const tableData = useMemo(() => generateTableData(config), [config])
 
   // 视口状态
@@ -78,6 +84,14 @@ const TableCanvas = (): React.ReactNode => {
     scrollTop: 0,
     scrollLeft: 0,
   })
+
+  // 选中单元格状态
+  const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null)
+  console.log("selectedCell", selectedCell)
+
+  // 渲染时间测量
+  const [renderTime, setRenderTime] = useState<number | null>(null)
+  const startTimeRef = useRef<number>(performance.now())
 
   /**
    * 计算当前可视区域应该渲染的行范围
@@ -114,6 +128,10 @@ const TableCanvas = (): React.ReactNode => {
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
+    // 获取容器的可视区域尺寸（CSS像素）
+    const viewWidth = container.clientWidth
+    const viewHeight = container.clientHeight
+
     // 清除画布
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
@@ -145,7 +163,7 @@ const TableCanvas = (): React.ReactNode => {
       const x = col * config.cellWidth - viewport.scrollLeft
 
       // 如果列在可视区域外，跳过渲染
-      if (x + config.cellWidth < 0 || x > canvas.width) continue
+      if (x + config.cellWidth < 0 || x > viewWidth) continue
 
       // 绘制列标题
       ctx.fillText(`列 ${col + 1}`, x + 10, config.headerHeight / 2)
@@ -176,11 +194,50 @@ const TableCanvas = (): React.ReactNode => {
         const x = col * config.cellWidth - viewport.scrollLeft
 
         // 如果列在可视区域外，跳过渲染
-        if (x + config.cellWidth < 0 || x > canvas.width) continue
+        if (x + config.cellWidth < 0 || x > viewWidth) continue
+
+        // 绘制选中单元格的背景浮层
+        if (
+          selectedCell &&
+          selectedCell.row === row &&
+          selectedCell.col === col
+        ) {
+          ctx.fillStyle = "rgba(24, 144, 255, 0.1)" // 浅蓝色半透明背景
+          ctx.fillRect(x, y, config.cellWidth, config.cellHeight)
+        }
 
         // 绘制单元格内容
+        ctx.fillStyle = "#000"
         const cellValue = tableData[row][`column${col + 1}`]
         ctx.fillText(String(cellValue), x + 10, y + config.cellHeight / 2)
+      }
+    }
+
+    // 绘制选中单元格的边框（在所有内容之后绘制，确保在最上层）
+    if (selectedCell) {
+      const selectedX =
+        selectedCell.col * config.cellWidth - viewport.scrollLeft
+      const selectedY =
+        config.headerHeight +
+        selectedCell.row * config.cellHeight -
+        viewport.scrollTop
+
+      // 只有当选中单元格在可视区域内时才绘制边框
+      if (
+        selectedX + config.cellWidth >= 0 &&
+        selectedX <= viewWidth &&
+        selectedY + config.cellHeight >= config.headerHeight &&
+        selectedY <= viewHeight
+      ) {
+        ctx.strokeStyle = "#1890ff" // 蓝色边框
+        ctx.lineWidth = 2
+        ctx.strokeRect(
+          selectedX,
+          selectedY,
+          config.cellWidth,
+          config.cellHeight
+        )
+        ctx.lineWidth = 1 // 恢复默认线宽
       }
     }
 
@@ -193,7 +250,56 @@ const TableCanvas = (): React.ReactNode => {
     totalWidth,
     totalHeight,
     calculateVisibleRows,
+    selectedCell,
   ])
+
+  /**
+   * 处理Canvas点击事件
+   * @param e 鼠标事件
+   */
+  const handleCanvasClick = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      try {
+        const canvas = canvasRef.current
+        if (!canvas) return
+
+        // 获取Canvas的边界矩形
+        const rect = canvas.getBoundingClientRect()
+
+        // 计算点击位置相对于Canvas的坐标（CSS像素）
+        const clickX = e.clientX - rect.left
+        const clickY = e.clientY - rect.top
+
+        // 计算实际坐标（考虑滚动偏移）
+        const actualX = clickX + viewport.scrollLeft
+        const actualY = clickY + viewport.scrollTop
+
+        // 检查是否点击在表头区域
+        if (actualY < config.headerHeight) {
+          // 点击在表头，取消选中
+          setSelectedCell(null)
+          return
+        }
+
+        // 计算点击的行列索引
+        const col = Math.floor(actualX / config.cellWidth)
+        const row = Math.floor(
+          (actualY - config.headerHeight) / config.cellHeight
+        )
+
+        // 检查是否在有效范围内
+        if (col >= 0 && col < config.columns && row >= 0 && row < config.rows) {
+          setSelectedCell({ row, col })
+        } else {
+          // 点击在表格外，取消选中
+          setSelectedCell(null)
+        }
+      } catch (error) {
+        console.error("处理单元格点击事件时出错:", error)
+      }
+    },
+    [viewport, config]
+  )
 
   /**
    * 处理滚动事件
@@ -270,47 +376,97 @@ const TableCanvas = (): React.ReactNode => {
   }, [])
 
   /**
-   * 滚动位置变化时重新渲染
+   * 滚动位置或选中状态变化时重新渲染
    */
   useEffect(() => {
     renderTable()
-    // 只依赖滚动位置，不依赖renderTable本身
+    // 依赖滚动位置和选中单元格状态，不依赖renderTable本身
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewport.scrollTop, viewport.scrollLeft])
+  }, [viewport.scrollTop, viewport.scrollLeft, selectedCell])
+
+  /**
+   * 测量初始渲染时间
+   */
+  useEffect(() => {
+    try {
+      // 等待首次渲染完成后测量
+      requestAnimationFrame(() => {
+        const endTime = performance.now()
+        const duration = endTime - startTimeRef.current
+        setRenderTime(duration)
+        console.log(`Canvas渲染方案 - 渲染时间: ${duration.toFixed(2)}ms`)
+      })
+    } catch (error) {
+      console.error("测量渲染时间时出错:", error)
+    }
+  }, [])
 
   return (
     <div
-      ref={containerRef}
       style={{
         width: "100%",
         height: "100vh",
-        overflow: "auto",
-        position: "relative",
+        display: "flex",
+        flexDirection: "column",
       }}
-      onScroll={handleScroll}
     >
-      {/* 创建一个占位div来提供滚动区域 */}
+      {/* 渲染时间显示 */}
       <div
         style={{
-          width: `${totalWidth}px`,
-          height: `${totalHeight}px`,
-          position: "absolute",
-          top: 0,
-          left: 0,
+          padding: "16px",
+          backgroundColor: "#f0f2f5",
+          borderBottom: "2px solid #1890ff",
+          fontWeight: "bold",
+          fontSize: "16px",
+          flexShrink: 0,
         }}
-      />
+      >
+        <span style={{ color: "#1890ff" }}>Canvas渲染方案</span>
+        {renderTime !== null && (
+          <span style={{ marginLeft: "20px", color: "#52c41a" }}>
+            渲染时间: {renderTime.toFixed(2)}ms
+          </span>
+        )}
+        <span style={{ marginLeft: "20px", color: "#666", fontSize: "14px" }}>
+          (数据量: {config.rows} 行 × {config.columns} 列)
+        </span>
+      </div>
 
-      {/* Canvas层 */}
-      <canvas
-        ref={canvasRef}
+      <div
+        ref={containerRef}
         style={{
-          position: "sticky",
-          top: 0,
-          bottom: 0,
-          left: 0,
-          right: 0,
+          width: "100%",
+          flex: 1,
+          overflow: "auto",
+          position: "relative",
         }}
-      />
+        onScroll={handleScroll}
+      >
+        {/* 创建一个占位div来提供滚动区域 */}
+        <div
+          style={{
+            width: `${totalWidth}px`,
+            height: `${totalHeight}px`,
+            position: "absolute",
+            top: 0,
+            left: 0,
+          }}
+        />
+
+        {/* Canvas层 */}
+        <canvas
+          ref={canvasRef}
+          onClick={handleCanvasClick}
+          style={{
+            position: "sticky",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            cursor: "pointer",
+          }}
+        />
+      </div>
     </div>
   )
 }
